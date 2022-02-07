@@ -247,6 +247,7 @@ struct ec_master {
                                         clock slave config. */
     ec_slave_t *dc_ref_clock; /**< DC reference clock slave. */
 
+    unsigned int reboot; /**< Reboot requested. */
     unsigned int scan_busy; /**< Current scan state. */
     unsigned int allow_scan; /**< \a True, if slave scanning is allowed. */
     struct semaphore scan_sem; /**< Semaphore protecting the \a scan_busy
@@ -359,6 +360,7 @@ void ec_master_output_stats(ec_master_t *);
 void ec_master_clear_eoe_handlers(ec_master_t *);
 #endif
 void ec_master_clear_slaves(ec_master_t *);
+void ec_master_reboot_slaves(ec_master_t *);
 
 unsigned int ec_master_config_count(const ec_master_t *);
 ec_slave_config_t *ec_master_get_config(
