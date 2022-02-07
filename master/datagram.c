@@ -586,6 +586,9 @@ void ec_datagram_print_state(
         case EC_DATAGRAM_ERROR:
             printk(KERN_CONT "error");
             break;
+        case EC_DATAGRAM_INVALID:
+            printk(KERN_CONT "invalid");
+            break;
         default:
             printk(KERN_CONT "???");
     }

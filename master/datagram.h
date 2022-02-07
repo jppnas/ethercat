@@ -77,7 +77,8 @@ typedef enum {
     EC_DATAGRAM_SENT,      /**< Sent (still in the queue). */
     EC_DATAGRAM_RECEIVED,  /**< Received (dequeued). */
     EC_DATAGRAM_TIMED_OUT, /**< Timed out (dequeued). */
-    EC_DATAGRAM_ERROR      /**< Error while sending/receiving (dequeued). */
+    EC_DATAGRAM_ERROR,     /**< Error while sending/receiving (dequeued). */
+    EC_DATAGRAM_INVALID    /**< Unused and should not be queued (dequeued). */
 } ec_datagram_state_t;
 
 /*****************************************************************************/
