@@ -691,7 +691,7 @@ static ATTRIBUTES int ec_ioctl_slave_reboot(
         ec_master_reboot_slaves(master);
     } else {
         if (!(slave = ec_master_find_slave(master, 0, io.slave_position))) {
-            ec_lock_up(&master->master_sem);
+            up(&master->master_sem);
             EC_MASTER_ERR(master, "Slave %u does not exist!\n",
                     io.slave_position);
             return -EINVAL;
