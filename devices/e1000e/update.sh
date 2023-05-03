@@ -11,7 +11,7 @@ KERNELVER=$3
 
 set -x
 
-for f in $KERNELDIR/drivers/net/ethernet/intel/e1000e/*.[ch]; do
+for f in $KERNELDIR/*.[ch]; do
     echo $f
     b=$(basename $f)
     o=${b/\./-$KERNELVER-orig.}
