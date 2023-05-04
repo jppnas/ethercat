@@ -1030,6 +1030,7 @@ static bool e1000_clean_rx_irq(struct e1000_ring *rx_ring, int *work_done,
 
 		if (adapter->ecdev) {
 			ecdev_receive(adapter->ecdev, skb->data, length);
+			adapter->ec_watchdog_jiffies = jiffies;
 		} else {
 		    e1000_receive_skb(adapter, netdev, skb, staterr,
 				      rx_desc->wb.upper.vlan);
@@ -1484,6 +1485,7 @@ copydone:
 
 		if (adapter->ecdev) {
 			ecdev_receive(adapter->ecdev, skb->data, length);
+			adapter->ec_watchdog_jiffies = jiffies;
 		} else {
 			e1000_receive_skb(adapter, netdev, skb, staterr,
 					rx_desc->wb.middle.vlan);
@@ -1673,6 +1675,7 @@ static bool e1000_clean_jumbo_rx_irq(struct e1000_ring *rx_ring, int *work_done,
 
 		if (adapter->ecdev) {
 			ecdev_receive(adapter->ecdev, skb->data, length);
+			adapter->ec_watchdog_jiffies = jiffies;
 		} else {
 			e1000_receive_skb(adapter, netdev, skb, staterr,
 					  rx_desc->wb.upper.vlan);
@@ -6016,19 +6019,26 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 		netdev_sent_queue(netdev, skb->len);
 		e1000_tx_queue(tx_ring, tx_flags, count);
 		/* Make sure there is space in the ring for the next send. */
-		if (!adapter->ecdev) {
-			e1000_maybe_stop_tx(tx_ring,
-				    ((MAX_SKB_FRAGS + 1) *
-				     DIV_ROUND_UP(PAGE_SIZE,
-						  adapter->tx_fifo_limit) + 4));
+		if (adapter->ecdev) {
+			// Do not call e1000e_update_tdt_wa(), because it busy-waits.
+			// So the FLAG2_PCIM2PCI_ARBITER_WA is not active in EtherCAT.
+			// Instead, just set the ring pointer.
+			writel(tx_ring->next_to_use, tx_ring->tail);
 		}
-		if (!netdev_xmit_more() ||
-		    netif_xmit_stopped(netdev_get_tx_queue(netdev, 0))) {
-			if (adapter->flags2 & FLAG2_PCIM2PCI_ARBITER_WA)
-				e1000e_update_tdt_wa(tx_ring,
-						     tx_ring->next_to_use);
-			else
-				writel(tx_ring->next_to_use, tx_ring->tail);
+		else {
+			e1000_maybe_stop_tx(tx_ring,
+					    (MAX_SKB_FRAGS *
+					     DIV_ROUND_UP(PAGE_SIZE,
+							  adapter->tx_fifo_limit) + 2));
+
+			if (!netdev_xmit_more() ||
+					netif_xmit_stopped(netdev_get_tx_queue(netdev, 0))) {
+				if (adapter->flags2 & FLAG2_PCIM2PCI_ARBITER_WA)
+					e1000e_update_tdt_wa(tx_ring,
+							tx_ring->next_to_use);
+				else
+					writel(tx_ring->next_to_use, tx_ring->tail);
+			}
 		}
 	} else {
 		if (!adapter->ecdev) {
