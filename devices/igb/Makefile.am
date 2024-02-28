@@ -148,6 +148,8 @@ EXTRA_DIST = \
 	igb_ptp-4.19-orig.c \
 	igb_ptp-4.4-ethercat.c \
 	igb_ptp-4.4-orig.c \
+	kcompat-generator.sh \
+	kcompat-lib.sh \
 	update.sh
 
 #------------------------------------------------------------------------------
