@@ -2678,7 +2678,7 @@ void ec_poll(struct net_device *netdev)
 	for (i = 0; i < adapter->num_q_vectors; i++) {
 		struct igb_q_vector *q_vector = adapter->q_vector[i];
 		if (q_vector->tx.ring) {
-			igb_clean_tx_irq(q_vector, budget);
+			igb_clean_tx_irq(q_vector);
 		}
 
 		if (q_vector->rx.ring) {
@@ -4495,7 +4495,7 @@ void igb_unmap_and_free_tx_resource(struct igb_ring *ring,
 				    struct igb_tx_buffer *tx_buffer)
 {
 	if (tx_buffer->skb) {
-		struct igb_adapter *adapter = netdev_priv(tx_ring->netdev);
+		struct igb_adapter *adapter = netdev_priv(ring->netdev);
 		if (!adapter->ecdev) {
 			dev_kfree_skb_any(tx_buffer->skb);
 		}
@@ -5899,7 +5899,6 @@ static int igb_tx_map(struct igb_ring *tx_ring,
 	u32 tx_flags = first->tx_flags;
 	u32 cmd_type = igb_tx_cmd_type(skb, tx_flags);
 	u16 i = tx_ring->next_to_use;
-	struct igb_adapter *adapter = netdev_priv(tx_ring->netdev);
 
 	tx_desc = IGB_TX_DESC(tx_ring, i);
 
@@ -6082,6 +6081,7 @@ netdev_tx_t igb_xmit_frame_ring(struct sk_buff *skb,
 	u16 count = TXD_USE_COUNT(skb_headlen(skb));
 	__be16 protocol = vlan_get_protocol(skb);
 	u8 hdr_len = 0;
+	struct igb_adapter *adapter = netdev_priv(tx_ring->netdev);
 
 	/*
 	 * need: 1 descriptor per page * PAGE_SIZE/IGB_MAX_DATA_PER_TXD,
@@ -8743,18 +8743,18 @@ static bool igb_clean_rx_irq(struct igb_q_vector *q_vector, int budget)
 		skb = igb_fetch_rx_buffer(rx_ring, rx_desc, skb);
 
 		if (adapter->ecdev) {
-			unsigned char *va = page_address(rx_buffer->page) + rx_buffer->page_offset;
-			unsigned int size = le16_to_cpu(rx_desc->wb.upper.length);
-			ecdev_receive(adapter->ecdev, va, size);
-			adapter->ec_watchdog_jiffies = jiffies;
-			igb_reuse_rx_page(rx_ring, rx_buffer);
+			// unsigned char *va = page_address(rx_buffer->page) + rx_buffer->page_offset;
+			// unsigned int size = le16_to_cpu(rx_desc->wb.upper.length);
+			// ecdev_receive(adapter->ecdev, va, size);
+			// adapter->ec_watchdog_jiffies = jiffies;
+			// igb_reuse_rx_page(rx_ring, rx_buffer);
 		}
 		else {
 			/* exit if we failed to retrieve a buffer */
 			if (!skb)
 				break;
 		}
-		
+
 		cleaned_count++;
 
 		/* fetch next buffer in frame if non-eop */
