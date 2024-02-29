@@ -6,6 +6,9 @@
 #ifndef _IGB_H_
 #define _IGB_H_
 
+/* EtherCAT header file */
+#include "../ecdev.h"
+
 #include <linux/kobject.h>
 
 #ifndef IGB_NO_LRO
@@ -706,6 +709,10 @@ struct igb_adapter {
 	unsigned int nfc_filter_count;
 	/* lock for RX network flow classification filter */
 	spinlock_t nfc_lock;
+
+	/* EtherCAT device variables */
+	ec_device_t *ecdev;
+	unsigned long ec_watchdog_jiffies;
 
 #ifdef ETHTOOL_GRXFHINDIR
 	u32 rss_indir_tbl_init;
