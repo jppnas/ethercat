@@ -8742,15 +8742,29 @@ static bool igb_clean_rx_irq(struct igb_q_vector *q_vector, int budget)
 		/* retrieve a buffer from the ring */
 		skb = igb_fetch_rx_buffer(rx_ring, rx_desc, skb);
 
-		/* exit if we failed to retrieve a buffer */
-		if (!skb)
-			break;
-
+		if (adapter->ecdev) {
+			unsigned char *va = page_address(rx_buffer->page) + rx_buffer->page_offset;
+			unsigned int size = le16_to_cpu(rx_desc->wb.upper.length);
+			ecdev_receive(adapter->ecdev, va, size);
+			adapter->ec_watchdog_jiffies = jiffies;
+			igb_reuse_rx_page(rx_ring, rx_buffer);
+		}
+		else {
+			/* exit if we failed to retrieve a buffer */
+			if (!skb)
+				break;
+		}
+		
 		cleaned_count++;
 
 		/* fetch next buffer in frame if non-eop */
 		if (igb_is_non_eop(rx_ring, rx_desc))
 			continue;
+
+		if (adapter->ecdev) {
+			total_packets++;
+			continue;
+		}
 
 		/* verify the packet layout is correct */
 		if (igb_cleanup_headers(rx_ring, rx_desc, skb)) {
