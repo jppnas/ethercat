@@ -8717,6 +8717,7 @@ static bool igb_clean_rx_irq(struct igb_q_vector *q_vector, int budget)
 	struct sk_buff *skb = rx_ring->skb;
 	unsigned int total_bytes = 0, total_packets = 0;
 	u16 cleaned_count = igb_desc_unused(rx_ring);
+	struct igb_adapter *adapter = q_vector->adapter;
 
 	do {
 		union e1000_adv_rx_desc *rx_desc;
@@ -8739,17 +8740,19 @@ static bool igb_clean_rx_irq(struct igb_q_vector *q_vector, int budget)
 		 */
 		rmb();
 
-		/* retrieve a buffer from the ring */
-		skb = igb_fetch_rx_buffer(rx_ring, rx_desc, skb);
 
 		if (adapter->ecdev) {
-			// unsigned char *va = page_address(rx_buffer->page) + rx_buffer->page_offset;
-			// unsigned int size = le16_to_cpu(rx_desc->wb.upper.length);
-			// ecdev_receive(adapter->ecdev, va, size);
-			// adapter->ec_watchdog_jiffies = jiffies;
-			// igb_reuse_rx_page(rx_ring, rx_buffer);
+			struct igb_rx_buffer *rx_buffer = &rx_ring->rx_buffer_info[rx_ring->next_to_clean];
+			unsigned char *va = page_address(rx_buffer->page) + rx_buffer->page_offset;
+			unsigned int size = le16_to_cpu(rx_desc->wb.upper.length);
+			ecdev_receive(adapter->ecdev, va, size);
+			adapter->ec_watchdog_jiffies = jiffies;
+			igb_reuse_rx_page(rx_ring, rx_buffer);
 		}
 		else {
+			/* retrieve a buffer from the ring */
+			skb = igb_fetch_rx_buffer(rx_ring, rx_desc, skb);
+			
 			/* exit if we failed to retrieve a buffer */
 			if (!skb)
 				break;
