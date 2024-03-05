@@ -6202,14 +6202,16 @@ static netdev_tx_t igb_xmit_frame(struct sk_buff *skb,
 {
 	struct igb_adapter *adapter = netdev_priv(netdev);
 
-	if (test_bit(__IGB_DOWN, adapter->state)) {
-		dev_kfree_skb_any(skb);
-		return NETDEV_TX_OK;
-	}
+	if (!adapter->ecdev) {
+		if (test_bit(__IGB_DOWN, adapter->state)) {
+			dev_kfree_skb_any(skb);
+			return NETDEV_TX_OK;
+		}
 
-	if (skb->len <= 0) {
-		dev_kfree_skb_any(skb);
-		return NETDEV_TX_OK;
+		if (skb->len <= 0) {
+			dev_kfree_skb_any(skb);
+			return NETDEV_TX_OK;
+		}
 	}
 
 	/*
