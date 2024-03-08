@@ -6207,12 +6207,14 @@ static netdev_tx_t igb_xmit_frame(struct sk_buff *skb,
 			dev_kfree_skb_any(skb);
 			return NETDEV_TX_OK;
 		}
+	}
 
 		if (skb->len <= 0) {
-			dev_kfree_skb_any(skb);
+			if (!adapter->ecdev) {
+				dev_kfree_skb_any(skb);
+			}
 			return NETDEV_TX_OK;
 		}
-	}
 
 	/*
 	 * The minimum packet size with TCTL.PSP set is 17 so pad the skb
