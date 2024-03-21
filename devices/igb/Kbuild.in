@@ -49,10 +49,19 @@ ifeq (@ENABLE_IGB@,1)
 		e1000_mbx-@KERNEL_IGB@-ethercat.o \
 		e1000_nvm-@KERNEL_IGB@-ethercat.o \
 		e1000_phy-@KERNEL_IGB@-ethercat.o \
+		e1000_manage-@KERNEL_IGB@-ethercat.o \
+		e1000_api-@KERNEL_IGB@-ethercat.o \
+		e1000_base-@KERNEL_IGB@-ethercat.o \
 		igb_ethtool-@KERNEL_IGB@-ethercat.o \
 		igb_hwmon-@KERNEL_IGB@-ethercat.o \
 		igb_main-@KERNEL_IGB@-ethercat.o \
-		igb_ptp-@KERNEL_IGB@-ethercat.o
+		igb_ptp-@KERNEL_IGB@-ethercat.o \
+		igb_hwmon-@KERNEL_IGB@-ethercat.o \
+		igb_param-@KERNEL_IGB@-ethercat.o \
+		igb_procfs-@KERNEL_IGB@-ethercat.o \
+		igb_vmdq-@KERNEL_IGB@-ethercat.o
+
+	ec_igb-objs += kcompat-@KERNEL_IGB@-ethercat.o
 
 	CFLAGS_igb_main-@KERNEL_IGB@-ethercat.o = -DREV=$(REV)
 endif
