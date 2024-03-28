@@ -8751,7 +8751,21 @@ static bool igb_clean_rx_irq(struct igb_q_vector *q_vector, int budget)
 			unsigned int size = le16_to_cpu(rx_desc->wb.upper.length);
 			ecdev_receive(adapter->ecdev, va, size);
 			adapter->ec_watchdog_jiffies = jiffies;
+
+			struct page *page = rx_buffer->page;
+			prefetchw(page);
+
+			/* we are reusing so sync this buffer for CPU use */
+			dma_sync_single_range_for_cpu(rx_ring->dev,
+							rx_buffer->dma,
+							rx_buffer->page_offset,
+							IGB_RX_BUFSZ,
+							DMA_FROM_DEVICE);
+
 			igb_reuse_rx_page(rx_ring, rx_buffer);
+
+			/* clear contents of rx_buffer */
+			rx_buffer->page = NULL;
 		}
 		else {
 			/* retrieve a buffer from the ring */
