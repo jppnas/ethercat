@@ -6202,6 +6202,10 @@ static netdev_tx_t igb_xmit_frame(struct sk_buff *skb,
 {
 	struct igb_adapter *adapter = netdev_priv(netdev);
 
+	if (adapter->num_tx_queues == 0) {
+		return NETDEV_TX_OK;
+	} 
+
 	if (!adapter->ecdev) {
 		if (test_bit(__IGB_DOWN, adapter->state)) {
 			dev_kfree_skb_any(skb);
@@ -6209,12 +6213,12 @@ static netdev_tx_t igb_xmit_frame(struct sk_buff *skb,
 		}
 	}
 
-		if (skb->len <= 0) {
-			if (!adapter->ecdev) {
-				dev_kfree_skb_any(skb);
-			}
-			return NETDEV_TX_OK;
+	if (skb->len <= 0) {
+		if (!adapter->ecdev) {
+			dev_kfree_skb_any(skb);
 		}
+		return NETDEV_TX_OK;
+	}
 
 	/*
 	 * The minimum packet size with TCTL.PSP set is 17 so pad the skb
