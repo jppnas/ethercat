@@ -6202,7 +6202,7 @@ static netdev_tx_t igb_xmit_frame(struct sk_buff *skb,
 {
 	struct igb_adapter *adapter = netdev_priv(netdev);
 
-	if (adapter->num_tx_queues == 0) {
+	if (unlikely(adapter->num_tx_queues == 0)) {
 		return NETDEV_TX_OK;
 	} 
 
