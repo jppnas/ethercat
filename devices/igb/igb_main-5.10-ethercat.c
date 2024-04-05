@@ -6202,6 +6202,10 @@ static netdev_tx_t igb_xmit_frame(struct sk_buff *skb,
 {
 	struct igb_adapter *adapter = netdev_priv(netdev);
 
+	if (unlikely(adapter->num_tx_queues == 0)) {
+		return NETDEV_TX_OK;
+	} 
+
 	if (!adapter->ecdev) {
 		if (test_bit(__IGB_DOWN, adapter->state)) {
 			dev_kfree_skb_any(skb);
@@ -6209,12 +6213,12 @@ static netdev_tx_t igb_xmit_frame(struct sk_buff *skb,
 		}
 	}
 
-		if (skb->len <= 0) {
-			if (!adapter->ecdev) {
-				dev_kfree_skb_any(skb);
-			}
-			return NETDEV_TX_OK;
+	if (skb->len <= 0) {
+		if (!adapter->ecdev) {
+			dev_kfree_skb_any(skb);
 		}
+		return NETDEV_TX_OK;
+	}
 
 	/*
 	 * The minimum packet size with TCTL.PSP set is 17 so pad the skb
@@ -8751,7 +8755,21 @@ static bool igb_clean_rx_irq(struct igb_q_vector *q_vector, int budget)
 			unsigned int size = le16_to_cpu(rx_desc->wb.upper.length);
 			ecdev_receive(adapter->ecdev, va, size);
 			adapter->ec_watchdog_jiffies = jiffies;
+
+			struct page *page = rx_buffer->page;
+			prefetchw(page);
+
+			/* we are reusing so sync this buffer for CPU use */
+			dma_sync_single_range_for_cpu(rx_ring->dev,
+							rx_buffer->dma,
+							rx_buffer->page_offset,
+							IGB_RX_BUFSZ,
+							DMA_FROM_DEVICE);
+
 			igb_reuse_rx_page(rx_ring, rx_buffer);
+
+			/* clear contents of rx_buffer */
+			rx_buffer->page = NULL;
 		}
 		else {
 			/* retrieve a buffer from the ring */

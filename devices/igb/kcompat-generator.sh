@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: @SPDX@
 # Copyright(c) 2007 - 2023 Intel Corporation.
 
-
+KSRC=/lib/modules/5.10.0-25-rt-amd64/source
 
 
 set -Eeuo pipefail
