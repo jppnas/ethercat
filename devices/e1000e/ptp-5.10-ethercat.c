@@ -6,7 +6,7 @@
  * Copyright (C) 2011 Richard Cochran <richardcochran@gmail.com>
  */
 
-#include "e1000-5.10-ethercat.h"
+#include "e1000.h"
 
 #ifdef CONFIG_E1000E_HWTS
 #include <linux/clocksource.h>

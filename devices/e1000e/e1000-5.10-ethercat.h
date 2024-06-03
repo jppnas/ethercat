@@ -22,10 +22,7 @@
 #include <linux/mii.h>
 #include <linux/mdio.h>
 #include <linux/pm_qos.h>
-#include "hw-5.10-ethercat.h"
-
-/* EtherCAT header file */
-#include "../ecdev.h"
+#include "hw.h"
 
 struct e1000_info;
 
@@ -116,8 +113,7 @@ enum e1000_boards {
 	board_pch2lan,
 	board_pch_lpt,
 	board_pch_spt,
-	board_pch_cnp,
-	board_pch_tgp
+	board_pch_cnp
 };
 
 struct e1000_ps_page {
@@ -333,10 +329,6 @@ struct e1000_adapter {
 	s32 ptp_delta;
 
 	u16 eee_advert;
-
-	/* EtherCAT device variables */
-	ec_device_t *ecdev;
-	unsigned long ec_watchdog_jiffies;
 };
 
 struct e1000_info {
@@ -444,7 +436,6 @@ s32 e1000e_get_base_timinca(struct e1000_adapter *adapter, u32 *timinca);
 #define FLAG2_DFLT_CRC_STRIPPING          BIT(12)
 #define FLAG2_CHECK_RX_HWTSTAMP           BIT(13)
 #define FLAG2_CHECK_SYSTIM_OVERFLOW       BIT(14)
-#define FLAG2_ENABLE_S0IX_FLOWS           BIT(15)
 
 #define E1000_RX_DESC_PS(R, i)	    \
 	(&(((union e1000_rx_desc_packet_split *)((R).desc))[i]))
@@ -507,7 +498,6 @@ extern const struct e1000_info e1000_pch2_info;
 extern const struct e1000_info e1000_pch_lpt_info;
 extern const struct e1000_info e1000_pch_spt_info;
 extern const struct e1000_info e1000_pch_cnp_info;
-extern const struct e1000_info e1000_pch_tgp_info;
 extern const struct e1000_info e1000_es2_info;
 
 void e1000e_ptp_init(struct e1000_adapter *adapter);

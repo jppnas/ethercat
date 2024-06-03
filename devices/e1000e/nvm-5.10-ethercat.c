@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /* Copyright(c) 1999 - 2018 Intel Corporation. */
 
-#include "e1000-5.10-ethercat.h"
+#include "e1000.h"
 
 /**
  *  e1000_raise_eec_clk - Raise EEPROM clock

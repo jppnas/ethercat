@@ -5,7 +5,7 @@
  * 80003ES2LAN Gigabit Ethernet Controller (Serdes)
  */
 
-#include "e1000-5.10-ethercat.h"
+#include "e1000.h"
 
 /* A table for the GG82563 cable length where the range is defined
  * with a lower bound at "index" and the upper bound at
