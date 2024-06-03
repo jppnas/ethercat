@@ -12,7 +12,7 @@
 #include <linux/vmalloc.h>
 #include <linux/pm_runtime.h>
 
-#include "e1000.h"
+#include "e1000-5.10-ethercat.h"
 
 enum { NETDEV_STATS, E1000_STATS };
 
