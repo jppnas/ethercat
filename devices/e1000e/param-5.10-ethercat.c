@@ -5,7 +5,7 @@
 #include <linux/module.h>
 #include <linux/pci.h>
 
-#include "e1000.h"
+#include "e1000-5.10-ethercat.h"
 
 /* This is the only thing that needs to be changed to adjust the
  * maximum number of ports that the driver can manage.

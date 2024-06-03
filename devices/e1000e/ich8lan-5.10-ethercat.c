@@ -38,7 +38,7 @@
  * Ethernet Connection (3) I218-V
  */
 
-#include "e1000.h"
+#include "e1000-5.10-ethercat.h"
 
 /* ICH GbE Flash Hardware Sequencing Flash Status Register bit breakdown */
 /* Offset 04h HSFSTS */

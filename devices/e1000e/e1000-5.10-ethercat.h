@@ -22,7 +22,10 @@
 #include <linux/mii.h>
 #include <linux/mdio.h>
 #include <linux/pm_qos.h>
-#include "hw.h"
+#include "hw-5.10-ethercat.h"
+
+/* EtherCAT header file */
+#include "../ecdev.h"
 
 struct e1000_info;
 
@@ -329,6 +332,10 @@ struct e1000_adapter {
 	s32 ptp_delta;
 
 	u16 eee_advert;
+
+	/* EtherCAT device variables */
+	ec_device_t *ecdev;
+	unsigned long ec_watchdog_jiffies;
 };
 
 struct e1000_info {

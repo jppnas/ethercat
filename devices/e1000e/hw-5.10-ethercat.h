@@ -4,8 +4,8 @@
 #ifndef _E1000_HW_H_
 #define _E1000_HW_H_
 
-#include "regs.h"
-#include "defines.h"
+#include "regs-5.10-ethercat.h"
+#include "defines-5.10-ethercat.h"
 
 struct e1000_hw;
 
@@ -467,10 +467,10 @@ struct e1000_host_mng_command_info {
 	u8 command_data[E1000_HI_MAX_MNG_DATA_LENGTH];
 };
 
-#include "mac.h"
-#include "phy.h"
-#include "nvm.h"
-#include "manage.h"
+#include "mac-5.10-ethercat.h"
+#include "phy-5.10-ethercat.h"
+#include "nvm-5.10-ethercat.h"
+#include "manage-5.10-ethercat.h"
 
 /* Function pointers for the MAC. */
 struct e1000_mac_operations {
@@ -710,8 +710,8 @@ struct e1000_hw {
 	} dev_spec;
 };
 
-#include "82571.h"
-#include "80003es2lan.h"
-#include "ich8lan.h"
+#include "82571-5.10-ethercat.h"
+#include "80003es2lan-5.10-ethercat.h"
+#include "ich8lan-5.10-ethercat.h"
 
 #endif
