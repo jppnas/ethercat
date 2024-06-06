@@ -6061,7 +6061,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 	count = e1000_tx_map(tx_ring, skb, first, adapter->tx_fifo_limit,
 			     nr_frags);
 	if (count) {
-		if (unlikely(!adapter->ecdev && skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP) &&
+		if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP) &&
 		    (adapter->flags & FLAG_HAS_HW_TIMESTAMP)) {
 			if (!adapter->tx_hwtstamp_skb) {
 				skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
@@ -6086,7 +6086,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 						  adapter->tx_fifo_limit) + 2));
 		}
 
-		if (
+		if (!netdev_xmit_more() ||
 		    netif_xmit_stopped(netdev_get_tx_queue(netdev, 0))) {
 			if (adapter->flags2 & FLAG2_PCIM2PCI_ARBITER_WA)
 				e1000e_update_tdt_wa(tx_ring,
