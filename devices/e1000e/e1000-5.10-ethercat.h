@@ -22,6 +22,7 @@
 #include <linux/mii.h>
 #include <linux/mdio.h>
 #include <linux/pm_qos.h>
+#include <linux/irq_work.h>
 #include "hw-5.10-ethercat.h"
 
 /* EtherCAT header file */
@@ -336,6 +337,7 @@ struct e1000_adapter {
 	/* EtherCAT device variables */
 	ec_device_t *ecdev;
 	unsigned long ec_watchdog_jiffies;
+	struct irq_work watchdog_kicker;
 };
 
 struct e1000_info {
@@ -443,6 +445,7 @@ s32 e1000e_get_base_timinca(struct e1000_adapter *adapter, u32 *timinca);
 #define FLAG2_DFLT_CRC_STRIPPING          BIT(12)
 #define FLAG2_CHECK_RX_HWTSTAMP           BIT(13)
 #define FLAG2_CHECK_SYSTIM_OVERFLOW       BIT(14)
+#define FLAG2_ENABLE_S0IX_FLOWS           BIT(15)
 
 #define E1000_RX_DESC_PS(R, i)	    \
 	(&(((union e1000_rx_desc_packet_split *)((R).desc))[i]))
