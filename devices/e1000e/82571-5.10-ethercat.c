@@ -45,7 +45,7 @@ static s32 e1000_set_d3_lplu_state_82574(struct e1000_hw *hw, bool active);
 static s32 e1000_init_phy_params_82571(struct e1000_hw *hw)
 {
 	struct e1000_phy_info *phy = &hw->phy;
-	s32 ret_val __attribute__ ((unused));
+	s32 ret_val;
 
 	if (hw->phy.media_type != e1000_media_type_copper) {
 		phy->type = e1000_phy_none;
