@@ -30,6 +30,16 @@
 
 char e1000e_driver_name[] = "ec_e1000e";
 
+static inline int check_arbiter_wa_flag(const struct e1000_adapter *adapter)
+{
+#ifdef EC_DISABLE_E1000E_WORKAROUND
+	return !adapter->ecdev && (adapter->flags2 & FLAG2_PCIM2PCI_ARBITER_WA);
+#else
+	return adapter->flags2 & FLAG2_PCIM2PCI_ARBITER_WA;
+#endif
+}
+
+
 #define DEFAULT_MSG_ENABLE (NETIF_MSG_DRV|NETIF_MSG_PROBE|NETIF_MSG_LINK)
 static int debug = -1;
 module_param(debug, int, 0);
@@ -50,7 +60,6 @@ static const struct e1000_info *e1000_info_tbl[] = {
 	[board_pch_lpt]		= &e1000_pch_lpt_info,
 	[board_pch_spt]		= &e1000_pch_spt_info,
 	[board_pch_cnp]		= &e1000_pch_cnp_info,
-	[board_pch_tgp]		= &e1000_pch_tgp_info,
 };
 
 struct e1000_reg_info {
@@ -689,7 +698,7 @@ map_skb:
 			 * such as IA-64).
 			 */
 			wmb();
-			if (adapter->flags2 & FLAG2_PCIM2PCI_ARBITER_WA)
+			if (check_arbiter_wa_flag(adapter))
 				e1000e_update_rdt_wa(rx_ring, i);
 			else
 				writel(i, rx_ring->tail);
@@ -791,7 +800,7 @@ static void e1000_alloc_rx_buffers_ps(struct e1000_ring *rx_ring,
 			 * such as IA-64).
 			 */
 			wmb();
-			if (adapter->flags2 & FLAG2_PCIM2PCI_ARBITER_WA)
+			if (check_arbiter_wa_flag(adapter))
 				e1000e_update_rdt_wa(rx_ring, i << 1);
 			else
 				writel(i << 1, rx_ring->tail);
@@ -884,7 +893,7 @@ check_page:
 		 * such as IA-64).
 		 */
 		wmb();
-		if (adapter->flags2 & FLAG2_PCIM2PCI_ARBITER_WA)
+		if (check_arbiter_wa_flag(adapter))
 			e1000e_update_rdt_wa(rx_ring, i);
 		else
 			writel(i, rx_ring->tail);
@@ -1069,10 +1078,6 @@ static void e1000_put_txbuf(struct e1000_ring *tx_ring,
 {
 	struct e1000_adapter *adapter = tx_ring->adapter;
 
-	if (adapter->ecdev) {
-		return;
-	}
-
 	if (buffer_info->dma) {
 		if (buffer_info->mapped_as_page)
 			dma_unmap_page(&adapter->pdev->dev, buffer_info->dma,
@@ -1083,10 +1088,12 @@ static void e1000_put_txbuf(struct e1000_ring *tx_ring,
 		buffer_info->dma = 0;
 	}
 	if (buffer_info->skb) {
-		if (drop)
-			dev_kfree_skb_any(buffer_info->skb);
-		else
-			dev_consume_skb_any(buffer_info->skb);
+		if (!adapter->ecdev) {
+			if (drop)
+				dev_kfree_skb_any(buffer_info->skb);
+			else
+				dev_consume_skb_any(buffer_info->skb);
+		}
 		buffer_info->skb = NULL;
 	}
 	buffer_info->time_stamp = 0;
@@ -1593,9 +1600,8 @@ static bool e1000_clean_jumbo_rx_irq(struct e1000_ring *rx_ring, int *work_done,
 			/* recycle both page and skb */
 			buffer_info->skb = skb;
 			/* an error means any chain goes out the window too */
-			if (!adapter->ecdev && rx_ring->rx_skb_top) {
+			if (!adapter->ecdev && rx_ring->rx_skb_top)
 				dev_kfree_skb_irq(rx_ring->rx_skb_top);
-			}
 			rx_ring->rx_skb_top = NULL;
 			goto next_desc;
 		}
@@ -4282,7 +4288,7 @@ void e1000e_reset(struct e1000_adapter *adapter)
 
 /**
  * e1000e_trigger_lsc - trigger an LSC interrupt
- * @adapter: 
+ * @adapter:
  *
  * Fire a link status change interrupt to start the watchdog.
  **/
@@ -4302,6 +4308,7 @@ void e1000e_up(struct e1000_adapter *adapter)
 	e1000_configure(adapter);
 
 	clear_bit(__E1000_DOWN, &adapter->state);
+
 	if (!adapter->ecdev) {
 		if (adapter->msix_entries)
 			e1000_configure_msix(adapter);
@@ -4712,13 +4719,14 @@ int e1000e_open(struct net_device *netdev)
 		return -EBUSY;
 
 	pm_runtime_get_sync(&pdev->dev);
-	
+
 	if (adapter->ecdev) {
 		ecdev_set_link(adapter->ecdev, 0);
 	} else {
 		netif_carrier_off(netdev);
 		netif_stop_queue(netdev);
 	}
+
 	/* allocate transmit descriptors */
 	err = e1000e_setup_tx_resources(adapter->tx_ring);
 	if (err)
@@ -4771,11 +4779,13 @@ int e1000e_open(struct net_device *netdev)
 
 	/* From here on the code is the same as e1000e_up() */
 	clear_bit(__E1000_DOWN, &adapter->state);
-	if (!adapter->ecdev) {
-		napi_enable(&adapter->napi);
 
-		e1000_irq_enable(adapter);
-	}
+	if (!adapter->ecdev) {
+        napi_enable(&adapter->napi);
+
+        e1000_irq_enable(adapter);
+    }
+
 	adapter->tx_hang_recheck = false;
 
 	hw->mac.get_link_status = true;
@@ -5277,6 +5287,14 @@ static void e1000_watchdog(struct timer_list *t)
 	/* TODO: make this use queue_delayed_work() */
 }
 
+static void ec_watchdog_kicker(struct irq_work *irqwork)
+{
+	struct e1000_adapter *adapter =
+		container_of(irqwork, struct e1000_adapter, watchdog_kicker);
+
+	schedule_work(&adapter->watchdog_task);
+}
+
 static void e1000_watchdog_task(struct work_struct *work)
 {
 	struct e1000_adapter *adapter = container_of(work,
@@ -5389,6 +5407,31 @@ static void e1000_watchdog_task(struct work_struct *work)
 				ew32(TARC(0), tarc0);
 			}
 
+			/* disable TSO for pcie and 10/100 speeds, to avoid
+			 * some hardware issues
+			 */
+			if (!(adapter->flags & FLAG_TSO_FORCE)) {
+				switch (adapter->link_speed) {
+				case SPEED_10:
+				case SPEED_100:
+					e_info("10/100 speed: disabling TSO\n");
+					netdev->features &= ~NETIF_F_TSO;
+					netdev->features &= ~NETIF_F_TSO6;
+					break;
+				case SPEED_1000:
+					netdev->features |= NETIF_F_TSO;
+					netdev->features |= NETIF_F_TSO6;
+					break;
+				default:
+					/* oops */
+					break;
+				}
+				if (hw->mac.type == e1000_pch_spt) {
+					netdev->features &= ~NETIF_F_TSO;
+					netdev->features &= ~NETIF_F_TSO6;
+				}
+			}
+
 			/* enable transmits in the hardware, need to do this
 			 * after setting TARC(0)
 			 */
@@ -5402,12 +5445,14 @@ static void e1000_watchdog_task(struct work_struct *work)
 			if (phy->ops.cfg_on_link_up)
 				phy->ops.cfg_on_link_up(hw);
 
-			if (adapter->ecdev)
+			if (adapter->ecdev) {
 				ecdev_set_link(adapter->ecdev, 1);
+			}
 			else {
 				netif_wake_queue(netdev);
 				netif_carrier_on(netdev);
 			}
+
 			if (!adapter->ecdev && !test_bit(__E1000_DOWN, &adapter->state))
 				mod_timer(&adapter->phy_info_timer,
 					  round_jiffies(jiffies + 2 * HZ));
@@ -5419,7 +5464,6 @@ static void e1000_watchdog_task(struct work_struct *work)
 			adapter->link_duplex = 0;
 			/* Link status message must follow this format */
 			netdev_info(netdev, "NIC Link is Down\n");
-			
 			if (adapter->ecdev) {
 				ecdev_set_link(adapter->ecdev, 0);
 			}
@@ -5428,8 +5472,9 @@ static void e1000_watchdog_task(struct work_struct *work)
 				netif_stop_queue(netdev);
 				if (!test_bit(__E1000_DOWN, &adapter->state))
 					mod_timer(&adapter->phy_info_timer,
-					  	round_jiffies(jiffies + 2 * HZ));
+						round_jiffies(jiffies + 2 * HZ));
 			}
+
 			/* 8000ES2LAN requires a Rx packet buffer work-around
 			 * on link down event; reset the controller to flush
 			 * the Rx packet buffer.
@@ -5461,7 +5506,7 @@ link_up:
 	 * if there is queued Tx work it cannot be done.  So
 	 * reset the controller to flush the Tx packet buffers.
 	 */
-	if (!adapter->ecdev && !netif_carrier_ok(netdev) &&
+	if (!netif_carrier_ok(netdev) &&
 	    (e1000_desc_unused(tx_ring) + 1 < tx_ring->count))
 		adapter->flags |= FLAG_RESTART_NOW;
 
@@ -5905,20 +5950,20 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 	if (test_bit(__E1000_DOWN, &adapter->state)) {
 		if (!adapter->ecdev)
 			dev_kfree_skb_any(skb);
-		return NETDEV_TX_OK;
+		return NETDEV_TX_BUSY;
 	}
 
 	if (skb->len <= 0) {
 		if (!adapter->ecdev)
 			dev_kfree_skb_any(skb);
-		return NETDEV_TX_OK;
+		return NETDEV_TX_BUSY;
 	}
 
 	/* The minimum packet size with TCTL.PSP set is 17 bytes so
 	 * pad skb in order to meet this minimum size requirement
 	 */
 	if (skb_put_padto(skb, 17))
-		return NETDEV_TX_OK;
+		return NETDEV_TX_BUSY;
 
 	mss = skb_shinfo(skb)->gso_size;
 	if (mss) {
@@ -5940,7 +5985,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 				e_err("__pskb_pull_tail failed.\n");
 				if (!adapter->ecdev)
 					dev_kfree_skb_any(skb);
-				return NETDEV_TX_OK;
+				return NETDEV_TX_BUSY;
 			}
 			len = skb_headlen(skb);
 		}
@@ -5979,7 +6024,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 	if (tso < 0) {
 		if (!adapter->ecdev)
 			dev_kfree_skb_any(skb);
-		return NETDEV_TX_OK;
+		return NETDEV_TX_BUSY;
 	}
 
 	if (tso)
@@ -6019,26 +6064,20 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 		netdev_sent_queue(netdev, skb->len);
 		e1000_tx_queue(tx_ring, tx_flags, count);
 		/* Make sure there is space in the ring for the next send. */
-		if (adapter->ecdev) {
-			// Do not call e1000e_update_tdt_wa(), because it busy-waits.
-			// So the FLAG2_PCIM2PCI_ARBITER_WA is not active in EtherCAT.
-			// Instead, just set the ring pointer.
-			writel(tx_ring->next_to_use, tx_ring->tail);
-		}
-		else {
+		if (!adapter->ecdev) {
 			e1000_maybe_stop_tx(tx_ring,
 					    (MAX_SKB_FRAGS *
 					     DIV_ROUND_UP(PAGE_SIZE,
 							  adapter->tx_fifo_limit) + 2));
+		}
 
-			if (!netdev_xmit_more() ||
-					netif_xmit_stopped(netdev_get_tx_queue(netdev, 0))) {
-				if (adapter->flags2 & FLAG2_PCIM2PCI_ARBITER_WA)
-					e1000e_update_tdt_wa(tx_ring,
-							tx_ring->next_to_use);
-				else
-					writel(tx_ring->next_to_use, tx_ring->tail);
-			}
+		if (adapter->ecdev || !netdev_xmit_more() ||
+				netif_xmit_stopped(netdev_get_tx_queue(netdev, 0))) {
+			if (check_arbiter_wa_flag(adapter))
+				e1000e_update_tdt_wa(tx_ring,
+						tx_ring->next_to_use);
+			else
+				writel(tx_ring->next_to_use, tx_ring->tail);
 		}
 	} else {
 		if (!adapter->ecdev) {
@@ -7426,7 +7465,7 @@ void ec_poll(struct net_device *netdev)
 	if (jiffies - adapter->ec_watchdog_jiffies >= 2 * HZ) {
 		struct e1000_hw *hw = &adapter->hw;
 		hw->mac.get_link_status = true;
-		e1000_watchdog(&adapter->watchdog_timer);
+		irq_work_queue(&adapter->watchdog_kicker);
 		adapter->ec_watchdog_jiffies = jiffies;
 	}
 
@@ -7604,32 +7643,6 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 			    NETIF_F_RXCSUM |
 			    NETIF_F_HW_CSUM);
 
-	/* disable TSO for pcie and 10/100 speeds to avoid
-	 * some hardware issues and for i219 to fix transfer
-	 * speed being capped at 60%
-	 */
-	if (!(adapter->flags & FLAG_TSO_FORCE)) {
-		switch (adapter->link_speed) {
-		case SPEED_10:
-		case SPEED_100:
-			e_info("10/100 speed: disabling TSO\n");
-			netdev->features &= ~NETIF_F_TSO;
-			netdev->features &= ~NETIF_F_TSO6;
-			break;
-		case SPEED_1000:
-			netdev->features |= NETIF_F_TSO;
-			netdev->features |= NETIF_F_TSO6;
-			break;
-		default:
-			/* oops */
-			break;
-		}
-		if (hw->mac.type == e1000_pch_spt) {
-			netdev->features &= ~NETIF_F_TSO;
-			netdev->features &= ~NETIF_F_TSO6;
-		}
-	}
-
 	/* Set user-changeable features (subset of all device features) */
 	netdev->hw_features = netdev->features;
 	netdev->hw_features |= NETIF_F_RXFCS;
@@ -7778,12 +7791,20 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	adapter->ecdev = ecdev_offer(netdev, ec_poll, THIS_MODULE);
 	if (adapter->ecdev) {
+		init_irq_work(&adapter->watchdog_kicker, ec_watchdog_kicker);
 		err = ecdev_open(adapter->ecdev);
 		if (err) {
 			ecdev_withdraw(adapter->ecdev);
 			goto err_register;
 		}
 		adapter->ec_watchdog_jiffies = jiffies;
+		if (adapter->flags2 & FLAG2_PCIM2PCI_ARBITER_WA) {
+			e_warn("Driver uses Workaround with busy wait "
+				"which causes a lot of jitter! Compile with "
+				"-DEC_DISABLE_E1000E_WORKAROUND do disable the "
+				"workaround for EtherCAT operations."
+			);
+		}
 	} else {
 		strlcpy(netdev->name, "eth%d", sizeof(netdev->name));
 		err = register_netdev(netdev);
@@ -7847,6 +7868,7 @@ static void e1000_remove(struct pci_dev *pdev)
 
 	if (adapter->ecdev) {
 		ecdev_close(adapter->ecdev);
+		irq_work_sync(&adapter->watchdog_kicker);
 		ecdev_withdraw(adapter->ecdev);
 	}
 
@@ -7871,8 +7893,9 @@ static void e1000_remove(struct pci_dev *pdev)
 		}
 	}
 
-	if (!adapter->ecdev)
-		unregister_netdev(netdev);
+	if (!adapter->ecdev) {
+        unregister_netdev(netdev);
+    }
 
 	if (pci_dev_run_wake(pdev))
 		pm_runtime_get_noresume(&pdev->dev);
@@ -8007,20 +8030,20 @@ static const struct pci_device_id e1000_pci_tbl[] = {
 	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_CMP_I219_V11), board_pch_cnp },
 	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_CMP_I219_LM12), board_pch_spt },
 	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_CMP_I219_V12), board_pch_spt },
-	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_TGP_I219_LM13), board_pch_tgp },
-	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_TGP_I219_V13), board_pch_tgp },
-	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_TGP_I219_LM14), board_pch_tgp },
-	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_TGP_I219_V14), board_pch_tgp },
-	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_TGP_I219_LM15), board_pch_tgp },
-	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_TGP_I219_V15), board_pch_tgp },
-	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_ADP_I219_LM16), board_pch_tgp },
-	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_ADP_I219_V16), board_pch_tgp },
-	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_ADP_I219_LM17), board_pch_tgp },
-	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_ADP_I219_V17), board_pch_tgp },
-	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_MTP_I219_LM18), board_pch_tgp },
-	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_MTP_I219_V18), board_pch_tgp },
-	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_MTP_I219_LM19), board_pch_tgp },
-	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_MTP_I219_V19), board_pch_tgp },
+	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_TGP_I219_LM13), board_pch_cnp },
+	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_TGP_I219_V13), board_pch_cnp },
+	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_TGP_I219_LM14), board_pch_cnp },
+	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_TGP_I219_V14), board_pch_cnp },
+	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_TGP_I219_LM15), board_pch_cnp },
+	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_TGP_I219_V15), board_pch_cnp },
+	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_ADP_I219_LM16), board_pch_cnp },
+	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_ADP_I219_V16), board_pch_cnp },
+	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_ADP_I219_LM17), board_pch_cnp },
+	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_ADP_I219_V17), board_pch_cnp },
+	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_MTP_I219_LM18), board_pch_cnp },
+	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_MTP_I219_V18), board_pch_cnp },
+	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_MTP_I219_LM19), board_pch_cnp },
+	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_PCH_MTP_I219_V19), board_pch_cnp },
 
 	{ 0, 0, 0, 0, 0, 0, 0 }	/* terminate list */
 };
@@ -8080,7 +8103,7 @@ static void __exit e1000_exit_module(void)
 module_exit(e1000_exit_module);
 
 MODULE_AUTHOR("Intel Corporation, <linux.nics@intel.com>");
-MODULE_DESCRIPTION("EtherCAT-capable Intel(R) PRO/1000 Network Driver");
+MODULE_DESCRIPTION("Ethercat-capable Intel(R) PRO/1000 Network Driver");
 MODULE_LICENSE("GPL v2");
 
 /* netdev.c */
